@@ -11,16 +11,17 @@ BUFSIZE = 4096
 def accept_receive(server):
     try:
     # ソケットからデータを受け取って，プロトコルに従って情報を取り出す
-        client, address = server.accept()
-        data = client.recv(BUFSIZE)
-        print(f"Raw data received (bytes): {data}")
-        decoded_data = data.decode("UTF-8")
-        print(f"Decoded data (str): {decoded_data}")
-        request = json.loads(decoded_data)
+        while True:
+            client, address = server.accept()
+            data = client.recv(BUFSIZE)
+            print(f"Raw data received (bytes): {data}")
+            decoded_data = data.decode("UTF-8")
+            print(f"Decoded data (str): {decoded_data}")
+            request = json.loads(decoded_data)
 
-        to_user = request["to"]
-        response = read_message(to_user)
-        client.sendall(response.encode("UTF-8"))
+            to_user = request["to"]
+            response = read_message(to_user)
+            client.sendall(response.encode("UTF-8"))
     except KeyboardInterrupt:  # Ctrl + C を押した場合の処理
         print("ソケットを解放します")
         server.close()  # ソケット接続を終了
@@ -32,18 +33,19 @@ def accept_receive(server):
 def accept_send(server):
     # ソケットからデータを受け取って，プロトコルに従って情報を取り出す
     try:
-        client, address = server.accept()
-        data = client.recv(BUFSIZE)
-        print(f"Raw data received (bytes): {data}")
-        decoded_data = data.decode("UTF-8")  # デコード結果を変数に代入
-        print(f"Decoded data (str): {decoded_data}")
-        request = json.loads(decoded_data)
+        while True:
+            client, address = server.accept()
+            data = client.recv(BUFSIZE)
+            print(f"Raw data received (bytes): {data}")
+            decoded_data = data.decode("UTF-8")  # デコード結果を変数に代入
+            print(f"Decoded data (str): {decoded_data}")
+            request = json.loads(decoded_data)
 
-        to_user = request["to"]
-        from_user = request["from"]
-        content = request["message"]
-        response = write_message(from_user, to_user, content)
-        client.sendall(response.encode("UTF-8"))
+            to_user = request["to"]
+            from_user = request["from"]
+            content = request["message"]
+            response = write_message(from_user, to_user, content)
+            client.sendall(response.encode("UTF-8"))
     except KeyboardInterrupt:  # Ctrl + C を押した場合の処理
         print("ソケットを解放します")
         server.close()  # ソケット接続を終了
@@ -75,12 +77,28 @@ def write_message(from_user: str, to_user: str, content: str):
 
 # 受信リクエストの内容を DB からメッセージを取得する関数
 def read_message(to_user: str):
-    conn = sqlite3.connect("message_dev.db")
-    sql = "SELECT * FROM messages"
-    cur = conn.cursor()
-    cur.execute(sql)
-    messages = cur.fetchall()
-    return messages
+    try:
+        conn = sqlite3.connect("messageing_dev.db")
+        sql = "SELECT * FROM messages WHERE to_user = ?"
+        cur = conn.cursor()
+        cur.execute(sql,(to_user,))
+        messages = cur.fetchall()
+        print(messages)
+        message_list = [
+            {"from": row[0], "to": row[1], "content": row[2], "timestamp": row[3]}
+            for row in messages
+        ]
+        response = json.dumps(message_list)
+    except sqlite3.Error as e:
+        print(f"Database Error: {e}")
+        response = json.dumps({"error": str(e)})
+    except Exception as e:
+        print(f"Error: {e}")
+        response = json.dumps({"error": str(e)})
+    finally:
+        cur.close()
+        conn.close()
+        return response
 
 # ソケットを開く
 send_server = socket.socket(
