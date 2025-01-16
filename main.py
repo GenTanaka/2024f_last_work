@@ -17,7 +17,8 @@ def accept_receive(server):
         request = json.loads(data)
 
         to_user = request["to"]
-        message = read_message(to_user)
+        response = read_message(to_user)
+        client.sendall(response.encode("UTF-8"))
     except KeyboardInterrupt:  # Ctrl + C を押した場合の処理
         print("ソケットを解放します")
         server.close()  # ソケット接続を終了
@@ -73,7 +74,10 @@ def write_message(from_user: str, to_user: str, content: str):
 # 受信リクエストの内容を DB からメッセージを取得する関数
 def read_message(to_user: str):
     conn = sqlite3.connect("message_dev.db")
-    messages = "SELECT * FROM messages"
+    sql = "SELECT * FROM messages"
+    cur = conn.cursor()
+    cur.execute(sql)
+    messages = cur.fetchall()
     return messages
 
 # ソケットを開く
