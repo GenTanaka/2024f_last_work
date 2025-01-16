@@ -13,8 +13,10 @@ def accept_receive(server):
     # ソケットからデータを受け取って，プロトコルに従って情報を取り出す
         client, address = server.accept()
         data = client.recv(BUFSIZE)
-        data.decode("UTF-8")
-        request = json.loads(data)
+        print(f"Raw data received (bytes): {data}")
+        decoded_data = data.decode("UTF-8")
+        print(f"Decoded data (str): {decoded_data}")
+        request = json.loads(decoded_data)
 
         to_user = request["to"]
         response = read_message(to_user)
@@ -33,8 +35,10 @@ def accept_send(server):
     try:
         client, address = server.accept()
         data = client.recv(BUFSIZE)
-        data.decode("UTF-8")
-        request = json.loads(data)
+        print(f"Raw data received (bytes): {data}")
+        decoded_data = data.decode("UTF-8")  # デコード結果を変数に代入
+        print(f"Decoded data (str): {decoded_data}")
+        request = json.loads(decoded_data)
 
         to_user = request["to"]
         from_user = request["from"]
@@ -52,19 +56,19 @@ def accept_send(server):
 # 送信リクエストの内容を DB に書き込む関数
 def write_message(from_user: str, to_user: str, content: str):
     try:
-        conn = sqlite3.connect("message_dev.db")
+        conn = sqlite3.connect("messageing_dev.db")
         cur = conn.cursor()
-        sql = f"INSERT INTO messages (from_user, to_user, content) ({from_user},{to_user},{content})"
-        cur.execute(sql)
+        sql = "INSERT INTO messages (from_user, to_user, content) VALUES (?, ?, ?)"
+        cur.execute(sql, (from_user, to_user, content))
         conn.commit()
 
         response = "Message received! Thank you!\n"
     except sqlite3.Error as e:
         print(f"Database Error: {e}")
-        response = e
+        response = json.dumps({"error": str(e)})
     except Exception as e:
         print(f"Error: {e}")
-        response = e
+        response = json.dumps({"error": str(e)})
     finally:
         cur.close()
         conn.close()

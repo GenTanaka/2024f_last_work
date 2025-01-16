@@ -1,49 +1,106 @@
-# -*- coding: utf-8 -*-
+import json
+import socket
+from datetime import datetime
 
-import socket # ソケットモジュールを取得
-import threading # スレッドモジュールを取得
-import sys # システムモジュールを取得(プログラムの終了シグナル送信に利用)
+HOST = "bastion.jn.sfc.keio.ac.jp"  # Replace with the actual host
+SEND_PORT = 13000
+RECEIVE_PORT = 13001
+BUFFSIZE = 4096
 
-"""
-IPv4,UDPでサーバに接続して, キーボード入力された文字列を送信、サーバから受信した文字列を画面表示するクライアントプログラムです.
-HOST,PORTに適切な値を設定して実行してください. PORTは講義内で自分が利用すると決めたものを設定してください.
-q キーのみが入力されるまで, 繰り返しデータを送信します.
-実行方法:
- $ python 2_udp_chatclient.py 
-"""
+while True:
+    command = input(
+        'Press 1 if you want to send a message, 2 if you want to receive a message, 3 if you want to exit: '
+    )
+    if command == '1':
+        sender = input('Enter your name: ')
+        recipient = input('Enter the recipient\'s name: ')
+        message = input('Enter the message: ')
 
-HOST = "bastion.jn.sfc.keio.ac.jp" # 接続先のホスト名(FQDNまたはIPv4)を指定する
-PORT = 13001 # ポートを指定する(サーバ側で実行しているコードと合致させる)
-BUFSIZE = 4096 # バッファサイズを指定
+        current_date = datetime.now()
+        formatted_date = current_date.strftime('%Y/%m/%d')
 
-def server_handler(client):
-    """
-    サーバ接続制御関数
-    """
-    while True: # クライアント接続がある限りループする
-        try: # 例外処理を監視
-            data = client.recv(BUFSIZE) # サーバからの受信データを取得
-            print(data.decode("UTF-8")) # 受信データを画面表示
-        except Exception as e: # 例外発生時の処理
-            print(f"error: {e}")
-            print("chat client exit")
-            sys.exit()
-    client.close()
+        # Sending JSON data with the specified structure
+        data = {
+            "from": sender,
+            "to": recipient,
+            "message": message,
+            "date": formatted_date
+        }
+        # Serialize the dictionary into a JSON string
+        json_data = json.dumps(data)
 
-client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # IPv4, UDPでソケット接続インスタンスを生成
+        try:
+            print('Sending message...')
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.connect((HOST, SEND_PORT))
 
-port = int(input("PORT: ")) or PORT # キーボード入力でPORTを指定
+            # Send the length of the JSON data first, then the data
+            message = json_data.encode('UTF-8')
+            client.sendall(len(message).to_bytes(
+                4, 'big'))  # Send length (4 bytes)
+            client.sendall(message)  # Send JSON data
 
-p = threading.Thread(target=server_handler, args=(client, )) # スレッドを生成
+            print(f"Message sent: {data}")
+        except Exception as e:
+            print(f"Error sending message: {e}")
+        finally:
+            client.close()
 
-p.setDaemon(True) # スレッドを生成
+    elif command == '2':
+        # Receiving JSON data
+        try:
+            print('Receiving message...')
+            # User inputs the recipient
+            to_user = input("Enter the recipient's name (to): ").strip()
 
-while True: # プログラムが実行中の限りループ
-    message = input("メッセージを入力してください: ") # キーボード入力を受け付け
-    client.sendto(message.encode("UTF-8"), (HOST, port)) # ポートとホストを指定して、データ送信
-    if message == "q": # キーボード入力が q キーのみの場合は処理を終了する
+            # Prepare JSON request
+            request_data = {
+                "to": to_user  # Only send the recipient's name
+            }
+            json_request = json.dumps(request_data).encode(
+                'utf-8')  # Serialize the request
+
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.connect((HOST, RECEIVE_PORT))
+
+            # Send the length of the JSON request first
+            client.sendall(len(json_request).to_bytes(
+                4, 'big'))  # Send length (4 bytes)
+            client.sendall(json_request)  # Send the JSON request
+
+            # Receive the length of the response first
+            length_data = client.recv(4)
+            if not length_data:
+                print("No length data received.")
+                client.close()
+                continue
+
+            response_length = int.from_bytes(
+                length_data, 'big')  # Decode the response length
+            response_data = b""
+
+            # Receive the full response data
+            while len(response_data) < response_length:
+                chunk = client.recv(BUFFSIZE)
+                if not chunk:
+                    break
+                response_data += chunk
+
+            # Decode and process the server's response
+            response_json = response_data.decode('utf-8')
+            response = json.loads(response_json)
+
+            # Display the response
+            if response.get("status") == "success":
+                print(f"Message for {to_user}: {response.get('message')}")
+            else:
+                print(f"Error: {response.get('message')}")
+
+        except Exception as e:
+            print(f"Error receiving message: {e}")
+        finally:
+            client.close()
+
+    elif command == '3':
+        print('Exiting')
         break
-    if not p.is_alive(): # スレッドがない場合は、スレッドを生成
-        p.start()
-
-client.close() # ソケット接続を終了
