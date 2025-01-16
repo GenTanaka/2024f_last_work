@@ -25,7 +25,6 @@ def accept_receive(server):
         print("ソケットを解放します")
         server.close()  # ソケット接続を終了
     finally:  # その他の例外発生時の処理
-        print("例外発生のため、ソケットを解放します")
         server.close()  # ソケット接続を終了
 
 
@@ -49,7 +48,6 @@ def accept_send(server):
         print("ソケットを解放します")
         server.close()  # ソケット接続を終了
     finally:  # その他の例外発生時の処理
-        print("例外発生のため、ソケットを解放します")
         server.close()  # ソケット接続を終了
 
 
